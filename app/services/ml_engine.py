@@ -15,6 +15,20 @@ class MLEngine:
     NEW_DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "dataset_2026_content.csv")
     OLD_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "phishing-website-detection-content-based")
 
+    # XAI Dictionary mapping HTML feature indices to human-readable names
+    FEATURE_NAMES = [
+        "Page title", "Input fields", "Buttons", "Images", "Submit button", 
+        "External links", "Password field", "Email input", "Hidden elements", 
+        "Audio tags", "Video tags", "Number of inputs", "Number of buttons", 
+        "Number of images", "Number of options", "Number of lists", 
+        "Table headers", "Table rows", "Hyperlinks", "Paragraphs", 
+        "Scripts", "Title length", "H1 tags", "H2 tags", "H3 tags", 
+        "Text length", "Clickable buttons", "Anchor tags", "Image tags", 
+        "Div elements", "Figures", "Footer", "Forms", "Text areas", 
+        "Iframes", "Text inputs", "Meta tags", "Navbars", "Object tags", 
+        "Picture tags", "Source tags", "Spans", "Tables"
+    ]
+
     def __init__(self):
         self.model = None
         self.load_model()
@@ -26,6 +40,36 @@ class MLEngine:
             print(f"Model loaded from {self.MODEL_PATH}")
         else:
             print("Model file not found. Please train the model first.")
+
+    def get_explanations(self, features, is_phishing):
+        """Generates XAI explanations using Random Forest feature importances."""
+        if self.model is None or not hasattr(self.model, 'feature_importances_'):
+            return []
+
+        importances = self.model.feature_importances_
+        
+        # Match features that are active (>0) with their model importance
+        active_impacts = []
+        for i in range(len(features)):
+            if features[i] > 0:
+                # In Random Forest, importance is always positive (0 to 1)
+                active_impacts.append((importances[i], self.FEATURE_NAMES[i], features[i]))
+                
+        # Sort by most important
+        active_impacts.sort(key=lambda x: x[0], reverse=True)
+        
+        explanations = []
+        if is_phishing:
+            for imp, name, val in active_impacts[:3]:
+                explanations.append(f"High Risk Indicator: Presence of {name} (Value: {val})")
+        else:
+            for imp, name, val in active_impacts[:3]:
+                explanations.append(f"Safe Structure: Standard use of {name} found")
+                
+        if not explanations:
+             explanations.append("Analysis completed using standard DOM inspection.")
+             
+        return explanations
 
     def train_model(self):
         """Trains a Random Forest model using the best available data."""
@@ -90,10 +134,14 @@ class MLEngine:
             prediction = self.model.predict([features])[0]
             probability = self.model.predict_proba([features])[0][1] # Probability of being phishing (label 1)
             
+            is_phish = bool(prediction)
+            explanations = self.get_explanations(features, is_phish)
+            
             return {
-                "is_phishing": bool(prediction),
+                "is_phishing": is_phish,
                 "confidence": float(probability if prediction == 1 else 1 - probability),
-                "risk_score": float(probability)
+                "risk_score": float(probability),
+                "explanations": explanations
             }
         except Exception as e:
             return {"error": str(e)}

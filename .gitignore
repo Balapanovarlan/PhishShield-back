@@ -1,1 +1,27 @@
+# Python / Virtual Environment
 venv/
+env/
+.env
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+
+# Data & Models (Keep these out of git to avoid bloating the repo)
+data/*.csv
+data/*.zip
+data/*.gz
+models/*.joblib
+models/*.pkl
+
+# Logs
+*.log
+dataset_build.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

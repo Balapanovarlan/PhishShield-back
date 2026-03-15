@@ -82,7 +82,8 @@ class HybridDetector:
                 "method": "Model A: Deep Scan (HTML Content Analysis)",
                 "risk_score": ml_result["risk_score"],
                 "confidence": ml_result["confidence"],
-                "details": f"Site is REACHABLE. Model A predicted '{status}' based on HTML structures."
+                "details": f"Site is REACHABLE. Model A predicted '{status}' based on HTML structures.",
+                "explanations": ml_result.get("explanations", [])
             }
 
         # ---------------------------------------------------------
@@ -106,5 +107,6 @@ class HybridDetector:
             "method": "Model B: Fallback Scan (URL Topography Analysis)",
             "risk_score": url_result["risk_score"],
             "confidence": url_result["confidence"],
-            "details": f"Site is NOT REACHABLE. Model B predicted '{status}' based on URL string patterns (Logistic Regression)."
+            "details": f"Site is NOT REACHABLE. Model B predicted '{status}' based on URL string patterns (Logistic Regression).",
+            "explanations": url_result.get("explanations", [])
         }
