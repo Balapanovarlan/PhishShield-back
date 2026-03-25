@@ -3,8 +3,10 @@ import pandas as pd
 from app.services.ml_engine import MLEngine
 from app.services.url_engine import URLEngine
 from app.services.whois_checker import WhoisChecker
+from app.services import blacklist_service
 from app.core.i18n import translate
 from urllib.parse import urlparse
+from sqlalchemy.orm import Session
 
 class HybridDetector:
     """Combines White-lists, Black-lists, HTML analysis, URL analysis and WHOIS."""
@@ -47,11 +49,34 @@ class HybridDetector:
             return domain[4:]
         return domain
 
-    def detect(self, url, locale="en"):
+    def detect(self, url, locale="en", db: Session | None = None):
         """Main detection entry point with Extended Information."""
         url_clean = url.lower().strip()
-        
-        # 1. Black-list First
+
+        # Parse domain early (needed for auto-blacklist check)
+        parsed = urlparse(url)
+        full_domain = (parsed.netloc or url.split('/')[0]).lower().strip()
+        base_domain = self.get_base_domain(full_domain)
+
+        # 0. Auto-Blacklist Check (community-detected phishing)
+        if db is not None:
+            bl_entry = blacklist_service.is_blacklisted(db, base_domain)
+            if bl_entry:
+                return {
+                    "status": "Phishing",
+                    "is_phishing": True,
+                    "confidence": 0.95,
+                    "risk_score": bl_entry.risk_score_avg or 0.9,
+                    "method": translate("method_auto_blacklist", locale),
+                    "details": translate("details_auto_blacklist", locale),
+                    "explanations": (bl_entry.explanations or [])[:4],
+                    "breakdown": {
+                        "html": 1.0, "url": 1.0,
+                        "reputation": 1.0, "protocol": 1.0,
+                    },
+                }
+
+        # 1. Black-list (PhishTank)
         if url_clean in self.phishtank_list:
             return {
                 "status": "Phishing",
@@ -67,10 +92,6 @@ class HybridDetector:
             }
 
         # 2. Multi-Factor White-list
-        parsed = urlparse(url)
-        full_domain = (parsed.netloc or url.split('/')[0]).lower().strip()
-        base_domain = self.get_base_domain(full_domain)
-        
         in_tranco = full_domain in self.tranco_list or base_domain in self.tranco_list
         in_majestic = full_domain in self.majestic_list or base_domain in self.majestic_list
         age = WhoisChecker.get_domain_age(url)
@@ -144,6 +165,17 @@ class HybridDetector:
             
         if not all_explanations:
             all_explanations.append(translate("xai_analysis_completed", locale))
+
+        # Record scan for auto-blacklist tracking
+        if db is not None:
+            blacklist_service.record_scan(
+                db=db,
+                domain=base_domain,
+                url=url_clean,
+                is_phishing=final_is_phishing,
+                risk_score=min(1.0, combined_risk),
+                explanations=all_explanations[:4],
+            )
 
         return {
             "status": status,
