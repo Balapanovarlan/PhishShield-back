@@ -11,11 +11,30 @@ class DataFetcher:
     
     PHISHTANK_URL = "http://data.phishtank.com/data/online-valid.csv.gz"
     TRANCO_URL = "https://tranco-list.eu/top-1m.csv.zip"
+    MAJESTIC_URL = "https://downloads.majestic.com/majestic_million.csv"
     DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data")
 
     def __init__(self):
         if not os.path.exists(self.DATA_DIR):
             os.makedirs(self.DATA_DIR)
+
+    def fetch_majestic(self):
+        """Downloads the latest Majestic Million list (backlink-based white-list)."""
+        print(f"[{datetime.now()}] Fetching Majestic Million data...")
+        response = requests.get(self.MAJESTIC_URL)
+        
+        if response.status_code == 200:
+            # Majestic CSV structure: GlobalRank,TldRank,Domain,...
+            df = pd.read_csv(BytesIO(response.content))
+            # We only need the Domain column (usually the 3rd column, index 2)
+            # but Majestic has headers, so we use the 'Domain' column
+            save_path = os.path.join(self.DATA_DIR, "majestic_latest.csv")
+            df[['Domain']].to_csv(save_path, index=False)
+            print(f"Success: Majestic data saved to {save_path}")
+            return df
+        else:
+            print(f"Error: Majestic download failed (Status: {response.status_code})")
+            return None
 
     def fetch_phishtank(self):
         """Downloads and extracts the latest phishing data from PhishTank."""
@@ -58,3 +77,4 @@ if __name__ == "__main__":
     fetcher = DataFetcher()
     fetcher.fetch_phishtank()
     fetcher.fetch_tranco()
+    fetcher.fetch_majestic()

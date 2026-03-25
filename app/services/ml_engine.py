@@ -7,6 +7,7 @@ from sklearn.metrics import accuracy_score
 from app.services.ml_features import MLFeatureExtractor
 from bs4 import BeautifulSoup
 import requests
+from app.core.i18n import translate
 
 class MLEngine:
     """Handles ML model training, loading, and prediction."""
@@ -15,18 +16,18 @@ class MLEngine:
     NEW_DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "dataset_2026_content.csv")
     OLD_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "phishing-website-detection-content-based")
 
-    # XAI Dictionary mapping HTML feature indices to human-readable names
-    FEATURE_NAMES = [
-        "Page title", "Input fields", "Buttons", "Images", "Submit button", 
-        "External links", "Password field", "Email input", "Hidden elements", 
-        "Audio tags", "Video tags", "Number of inputs", "Number of buttons", 
-        "Number of images", "Number of options", "Number of lists", 
-        "Table headers", "Table rows", "Hyperlinks", "Paragraphs", 
-        "Scripts", "Title length", "H1 tags", "H2 tags", "H3 tags", 
-        "Text length", "Clickable buttons", "Anchor tags", "Image tags", 
-        "Div elements", "Figures", "Footer", "Forms", "Text areas", 
-        "Iframes", "Text inputs", "Meta tags", "Navbars", "Object tags", 
-        "Picture tags", "Source tags", "Spans", "Tables"
+    # Translation keys for features
+    FEATURE_KEYS = [
+        "feature_page_title", "feature_input_fields", "feature_buttons", "feature_images", "feature_submit_button", 
+        "feature_external_links", "feature_password_field", "feature_email_input", "feature_hidden_elements", 
+        "feature_audio_tags", "feature_video_tags", "feature_number_of_inputs", "feature_number_of_buttons", 
+        "feature_number_of_images", "feature_number_of_options", "feature_number_of_lists", 
+        "feature_table_headers", "feature_table_rows", "feature_hyperlinks", "feature_paragraphs", 
+        "feature_scripts", "feature_title_length", "feature_h1_tags", "feature_h2_tags", "feature_h3_tags", 
+        "feature_text_length", "feature_clickable_buttons", "feature_anchor_tags", "feature_image_tags", 
+        "feature_div_elements", "feature_figures", "feature_footer", "feature_forms", "feature_text_areas", 
+        "feature_iframes", "feature_text_inputs", "feature_meta_tags", "feature_navbars", "feature_object_tags", 
+        "feature_picture_tags", "feature_source_tags", "feature_spans", "feature_tables"
     ]
 
     def __init__(self):
@@ -41,7 +42,7 @@ class MLEngine:
         else:
             print("Model file not found. Please train the model first.")
 
-    def get_explanations(self, features, is_phishing):
+    def get_explanations(self, features, is_phishing, locale="en"):
         """Generates XAI explanations using Random Forest feature importances."""
         if self.model is None or not hasattr(self.model, 'feature_importances_'):
             return []
@@ -53,21 +54,23 @@ class MLEngine:
         for i in range(len(features)):
             if features[i] > 0:
                 # In Random Forest, importance is always positive (0 to 1)
-                active_impacts.append((importances[i], self.FEATURE_NAMES[i], features[i]))
+                active_impacts.append((importances[i], self.FEATURE_KEYS[i], features[i]))
                 
         # Sort by most important
         active_impacts.sort(key=lambda x: x[0], reverse=True)
         
         explanations = []
         if is_phishing:
-            for imp, name, val in active_impacts[:3]:
-                explanations.append(f"High Risk Indicator: Presence of {name} (Value: {val})")
+            for imp, key, val in active_impacts[:3]:
+                name = translate(key, locale)
+                explanations.append(translate("xai_high_risk", locale, name=name, val=val))
         else:
-            for imp, name, val in active_impacts[:3]:
-                explanations.append(f"Safe Structure: Standard use of {name} found")
+            for imp, key, val in active_impacts[:3]:
+                name = translate(key, locale)
+                explanations.append(translate("xai_safe_structure", locale, name=name))
                 
         if not explanations:
-             explanations.append("Analysis completed using standard DOM inspection.")
+             explanations.append(translate("xai_analysis_completed", locale))
              
         return explanations
 
@@ -116,7 +119,7 @@ class MLEngine:
         joblib.dump(self.model, self.MODEL_PATH)
         print(f"Model saved to {self.MODEL_PATH}")
 
-    def predict(self, url):
+    def predict(self, url, locale="en"):
         """Fetches URL content, extracts features, and predicts phishing status."""
         if self.model is None:
             return {"error": "Model not loaded"}
@@ -135,7 +138,7 @@ class MLEngine:
             probability = self.model.predict_proba([features])[0][1] # Probability of being phishing (label 1)
             
             is_phish = bool(prediction)
-            explanations = self.get_explanations(features, is_phish)
+            explanations = self.get_explanations(features, is_phish, locale)
             
             return {
                 "is_phishing": is_phish,

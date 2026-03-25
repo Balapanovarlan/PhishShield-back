@@ -4,32 +4,39 @@ from urllib.parse import urlparse
 from collections import Counter
 
 class URLFeatureExtractor:
-    """Extracts structural and lexical features directly from a URL string."""
+    """Extracts structural and lexical features from a URL string, stripping protocols to improve model accuracy."""
     
     # Common words found in phishing URLs
     SUSPICIOUS_WORDS = ['login', 'secure', 'account', 'update', 'banking', 'paypal', 'verify', 'webscr', 'signin', 'free']
 
     @staticmethod
     def extract_features(url: str) -> list:
-        if not url.startswith('http'):
-            url = 'http://' + url
-            
-        parsed = urlparse(url)
+        # Clean the URL to avoid skewed length calculations
+        # Removing protocol (http://, https://) and www prefix
+        clean_url = re.sub(r'^https?://', '', url, flags=re.IGNORECASE)
+        clean_url = re.sub(r'^www\.', '', clean_url, flags=re.IGNORECASE)
+        
+        # Ensure urlparse still works correctly for other parts
+        full_url = url if url.startswith('http') else 'http://' + url
+        parsed = urlparse(full_url)
+        
         domain = parsed.netloc
+        # Clean domain as well for length and subdomain calculations
+        clean_domain = re.sub(r'^www\.', '', domain, flags=re.IGNORECASE)
         path = parsed.path
         
         return [
-            URLFeatureExtractor.get_url_length(url),
-            URLFeatureExtractor.get_domain_length(domain),
-            URLFeatureExtractor.count_dots(domain),
-            URLFeatureExtractor.count_hyphens(domain),
-            URLFeatureExtractor.has_at_symbol(url),
+            URLFeatureExtractor.get_url_length(clean_url), # Clean length!
+            URLFeatureExtractor.get_domain_length(clean_domain), # Clean domain length!
+            URLFeatureExtractor.count_dots(clean_domain),
+            URLFeatureExtractor.count_hyphens(clean_domain),
+            URLFeatureExtractor.has_at_symbol(clean_url),
             URLFeatureExtractor.has_double_slash_in_path(path),
-            URLFeatureExtractor.count_subdomains(domain),
-            URLFeatureExtractor.is_ip_address(domain),
-            URLFeatureExtractor.count_suspicious_words(url),
-            URLFeatureExtractor.calculate_entropy(domain),
-            URLFeatureExtractor.count_special_chars(url)
+            URLFeatureExtractor.count_subdomains(clean_domain),
+            URLFeatureExtractor.is_ip_address(clean_domain),
+            URLFeatureExtractor.count_suspicious_words(clean_url),
+            URLFeatureExtractor.calculate_entropy(clean_domain),
+            URLFeatureExtractor.count_special_chars(clean_url)
         ]
 
     @staticmethod
@@ -53,6 +60,7 @@ class URLFeatureExtractor:
     @staticmethod
     def count_subdomains(domain):
         # basic approximation: count dots in domain minus 1 (for the TLD)
+        # We use clean domain so 'www.google.com' (2 dots) becomes 'google.com' (1 dot) -> 0 subdomains
         dots = domain.count('.')
         return max(0, dots - 1)
         
